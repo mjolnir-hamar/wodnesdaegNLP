@@ -1,5 +1,11 @@
-from typing import List, Optional
-from pydantic import BaseModel, computed_field
+from typing import (
+    Optional,
+    List
+)
+from pydantic import (
+    BaseModel,
+    computed_field
+)
 
 from .text_entity import Sentence
 

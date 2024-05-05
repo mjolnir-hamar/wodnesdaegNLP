@@ -1,19 +1,27 @@
 import re
 import glob
+import logging
 from tqdm import tqdm
 from copy import deepcopy
-from typing import List
+from typing import (
+    Any,
+    List,
+    Dict
+)
 
 from src.lib.data_types import (
-    Corpus,
-    NerTag,
-    Lemma,
     Token,
-    Sentence
+    Lemma,
+    NerTag,
+    Sentence,
+    Corpus
 )
 import src.lib.consts.args as args_consts
 import src.lib.consts.file_types as file_consts
 from src.lib.corpus_extractor import CorpusExtractor
+
+
+logger = logging.getLogger(__name__)
 
 TAGGED_TOK_REGEX: re.Pattern = re.compile(r"\(([A-Z]+(?:-[A-Z]+)?)\s([\w$]+)-(\w+)\)")
 SENT_SPLIT_REGEX: re.Pattern = re.compile(r"\([.;]\s[.:;]-[.:;]\)")
@@ -24,7 +32,7 @@ HEADING_END: str = "</heading>"
 class IceCorpusExtractor(CorpusExtractor):
 
     @staticmethod
-    def extract_sentences(grammar_file: str) -> List[Sentence]:
+    def extract_sentences(grammar_file: str, keep_case_markings: bool = True) -> List[Sentence]:
         sentences: List[Sentence] = []
         sentence_builder: List[Token] = []
         with open(grammar_file, "r") as _f:
@@ -54,16 +62,20 @@ class IceCorpusExtractor(CorpusExtractor):
                 else:
                     for i, sub_line in enumerate(sub_lines):
                         for tag_match in TAGGED_TOK_REGEX.findall(sub_line):
+                            if not keep_case_markings:
+                                ner_tag = tag_match[0].split("-")[0]
+                            else:
+                                ner_tag = tag_match[0]
                             sentence_builder.append(
                                 Token(
                                     text=tag_match[1],
                                     lemma=Lemma(
                                         text=tag_match[2],
                                         ner_tag=NerTag(
-                                            tag=tag_match[0]
+                                            tag=ner_tag
                                         )
                                     ),
-                                    ner_tag=NerTag(tag=tag_match[0])
+                                    ner_tag=NerTag(tag=ner_tag)
                                 )
                             )
                         if i != 0 and i != len(sub_lines) - 1:
@@ -74,18 +86,27 @@ class IceCorpusExtractor(CorpusExtractor):
 
         return sentences
 
-    def __call__(self, *args, **kwargs) -> List[Corpus]:
+    def extract_corpora(self, **kwargs) -> List[Corpus]:
         corpora: List[Corpus] = []
+        corpus_dir: str = kwargs[args_consts.CORPUS_DIR]
+        sentence_extraction_kwargs: Dict[str, Any] = {
+            kwarg: val for kwarg, val in kwargs.items() if kwarg in args_consts.CORPUS_EXTRACTOR_KWARGS
+        }
         for grammar_file in tqdm(
-                glob.glob(f"{kwargs[args_consts.CORPUS_DIR]}/*.{file_consts.PSD}"),
-                desc=f"Loading corpora from {kwargs[args_consts.CORPUS_DIR]}"
+                glob.glob(f"{corpus_dir}/*.{file_consts.PSD}"),
+                desc=f"Loading corpora from {corpus_dir}"
         ):
             year, text_name, _, _ = grammar_file.split("/")[-1].split(".")
             corpora.append(
                 Corpus(
                     name=text_name,
                     year=year,
-                    sentences=self.extract_sentences(grammar_file=grammar_file)
+                    sentences=self.extract_sentences(
+                        grammar_file=grammar_file,
+                        **sentence_extraction_kwargs
+                    )
                 )
             )
+        logging.info(f"Extracted {len(corpora)} corpora from {corpus_dir}")
+
         return corpora

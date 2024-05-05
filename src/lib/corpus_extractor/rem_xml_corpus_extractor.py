@@ -1,15 +1,20 @@
 import re
 import glob
+import logging
 from tqdm import tqdm
 from lxml import etree
-from typing import List, Dict
+from typing import (
+    Any,
+    List,
+    Dict
+)
 
 from src.lib.data_types import (
-    Corpus,
-    NerTag,
-    Lemma,
     Token,
-    Sentence
+    Lemma,
+    NerTag,
+    Sentence,
+    Corpus
 )
 import src.lib.consts.args as args_consts
 import src.lib.consts.file_types as file_consts
@@ -18,6 +23,8 @@ from src.lib.corpus_extractor import CorpusExtractor
 """
 Based on https://github.com/cltk/middle_high_german_texts/blob/master/reader.py
 """
+
+logger = logging.getLogger(__name__)
 
 TOKEN_IDXS: str = "token_indices"
 COLUMN_IDXS: str = "column_indices"
@@ -101,7 +108,7 @@ class RemXmlCorpusExtractor(CorpusExtractor):
         return columns
 
     @staticmethod
-    def columns_to_corpus(columns: Dict) -> List[Sentence]:
+    def columns_to_corpus(columns: Dict, keep_case_markings: bool = True) -> List[Sentence]:
         sentences: List[Sentence] = []
         for col_idx, col_data in sorted(columns.items(), key=lambda kv: kv[0]):
             for line in col_data[LINES]:
@@ -126,21 +133,28 @@ class RemXmlCorpusExtractor(CorpusExtractor):
                     sentences.append(
                         Sentence(words=tokens)
                     )
+
         return sentences
 
-    def __call__(self, *args, **kwargs) -> List[Corpus]:
+    def extract_corpora(self, **kwargs) -> List[Corpus]:
         corpora: List[Corpus] = []
+        corpus_dir: str = kwargs[args_consts.CORPUS_DIR]
+        sentence_extraction_kwargs: Dict[str, Any] = {
+            kwarg: val for kwarg, val in kwargs.items() if kwarg in args_consts.CORPUS_EXTRACTOR_KWARGS
+        }
         for xml_file in tqdm(
-                glob.glob(f"{kwargs[args_consts.CORPUS_DIR]}/*.{file_consts.XML}"),
-                desc=f"Loading corpora from {kwargs[args_consts.CORPUS_DIR]}"
+                glob.glob(f"{corpus_dir}/*.{file_consts.XML}"),
+                desc=f"Loading corpora from {corpus_dir}"
         ):
 
             columns = self.extract_columns(xml_file)
-            sentences = self.columns_to_corpus(columns)
+            sentences = self.columns_to_corpus(columns, **sentence_extraction_kwargs)
             corpora.append(
                 Corpus(
                     name=xml_file.strip("/").split("/")[-1],
                     sentences=sentences
                 )
             )
+        logging.info(f"Extracted {len(corpora)} corpora from {corpus_dir}")
+
         return corpora

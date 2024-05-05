@@ -1,5 +1,8 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import (
+    Optional,
+    List
+)
 
 
 class Tag(BaseModel):
