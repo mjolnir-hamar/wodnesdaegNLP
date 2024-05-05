@@ -1,0 +1,4 @@
+.idea
+*.extracted_corpora
+**/__pycache__
+test*.py

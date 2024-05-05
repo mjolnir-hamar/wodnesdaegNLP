@@ -1,0 +1,2 @@
+PSD = "psd"
+XML = "xml"
