@@ -1,6 +1,7 @@
 from pydantic import BaseModel
-from src.lib.data_types.tag import NerTag
 from typing import List
+
+from src.lib.data_types.tag import NerTag
 
 
 class TextEntity(BaseModel):

@@ -1,7 +1,11 @@
+import os
+import json
+import shutil
 import logging
 import numpy as np
 import pandas as pd
 from copy import deepcopy
+import matplotlib.pyplot as plt
 from typing import (
     Any,
     List,
@@ -27,7 +31,10 @@ from transformers import (
     BatchEncoding
 )
 
-from src.lib.data_types import Corpus
+from src.lib.data_types import (
+    Corpus,
+    ModelTrainerOutput
+)
 from .model_trainer import ModelTrainer
 import src.lib.consts.model_trainer as model_consts
 
@@ -44,12 +51,14 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
     def __init__(self, task: str):
         super().__init__(task)
 
-    def convert_corpora_to_dataset(self, corpora: List[Corpus]) -> Tuple[Dataset, ClassLabel]:
+    def convert_corpora_to_dataset(self, corpora: List[Corpus], shuffle_seed: int) -> Tuple[Dataset, ClassLabel]:
 
         if self.task == model_consts.POS_TAGGING:
-            return self.convert_corpora_to_pos_dataset(corpora=corpora)
+            dataset, classmap = self.convert_corpora_to_pos_dataset(corpora=corpora)
         else:
             raise NotImplementedError
+        dataset = dataset.shuffle(seed=shuffle_seed)
+        return dataset, classmap
 
     @staticmethod
     def convert_corpora_to_pos_dataset(corpora: List[Corpus]) -> Tuple[Dataset, ClassLabel]:
@@ -80,6 +89,12 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
         dataset = dataset.cast_column(model_consts.NER_TAGS, Sequence(classmap))
 
         return dataset, classmap
+
+    @staticmethod
+    def downsample_dataset(dataset: Dataset, max_dataset_size: int) -> Dataset:
+        if len(dataset) > max_dataset_size:
+            return dataset.select(range(max_dataset_size))
+        return dataset
 
     @staticmethod
     def train_test_val_split(dataset: Dataset, train_perc: float, test_perc: float) -> DatasetDict:
@@ -222,7 +237,8 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
             epochs: int = 4,
             val_strategy: str = "epoch",
             save_strategy: str = "epoch",
-    ):
+            logging_steps: int = 100
+    ) -> ModelTrainerOutput:
 
         training_args = TrainingArguments(
             output_dir=output_dir,
@@ -233,6 +249,7 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
             num_train_epochs=epochs,
             evaluation_strategy=val_strategy,
             save_strategy=save_strategy,
+            logging_steps=logging_steps,
             push_to_hub=False
         )
 
@@ -251,4 +268,84 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
             compute_metrics=compute_metrics
         )
 
-        trainer.train()
+        training_results = trainer.train()
+
+        return ModelTrainerOutput(
+            trainer=trainer,
+            trainer_output=training_results
+        )
+
+    @staticmethod
+    def parse_log_history(log_history: Dict) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        train_hist = {"epoch": [], "loss": [], "learning_rate": []}
+        eval_hist = {"epoch": [], "precision": [], "recall": [], "f1": [], "accuracy": []}
+        for entry in log_history:
+            if "eval_loss" in entry.keys():
+                eval_hist["epoch"].append(entry["epoch"])
+                eval_hist["precision"].append(entry["eval_precision"])
+                eval_hist["recall"].append(entry["eval_recall"])
+                eval_hist["f1"].append(entry["eval_f1"])
+                eval_hist["accuracy"].append(entry["eval_accuracy"])
+            elif "loss" in entry.keys():
+                train_hist["epoch"].append(entry["epoch"])
+                train_hist["loss"].append(entry["loss"])
+                train_hist["learning_rate"].append(entry["learning_rate"])
+        return pd.DataFrame(train_hist), pd.DataFrame(eval_hist)
+
+    @staticmethod
+    def create_training_metrics_plots(train_hist: pd.DataFrame, eval_hist: pd.DataFrame, output_dir: str):
+
+        plot_dir = f"{output_dir}/plots"
+        if os.path.isdir(plot_dir):
+            shutil.rmtree(plot_dir)
+        os.mkdir(plot_dir)
+
+        # Training loss
+        ax = train_hist.plot.line(x="epoch", y="loss", ylabel="loss", title="Training Loss")
+        fig = ax.get_figure()
+        fig.savefig(f"{plot_dir}/training_loss.png")
+
+        # Learning rate
+        ax = train_hist.plot.line(
+            x="epoch", y="learning_rate", ylabel="learning_rate", logy=True, title="Learning Rate"
+        )
+        fig = ax.get_figure()
+        fig.savefig(f"{plot_dir}/learning_rate.png")
+
+        # Eval metrics
+        fig, axes = plt.subplots(2, 2)
+        eval_hist.plot.line(
+            x="epoch", y="precision", ylabel="precision", title="Training Validation Precision", ax=axes[0, 0]
+        )
+        eval_hist.plot.line(
+            x="epoch", y="recall", ylabel="recall", title="Training Validation Recall", ax=axes[0, 1]
+        )
+        eval_hist.plot.line(
+            x="epoch", y="f1", ylabel="f1", title="Training Validation F1", ax=axes[1, 0]
+        )
+        eval_hist.plot.line(
+            x="epoch", y="accuracy", ylabel="accuracy", title="Training Validation Accuracy", ax=axes[1, 1]
+        )
+        plt.subplots_adjust(wspace=0.5, hspace=0.5)
+        fig.savefig(f"{plot_dir}/training_validation_metrics.png")
+
+    def save_training_metrics(self, training_results: ModelTrainerOutput, output_dir: str):
+        if os.path.isdir(output_dir):
+            metrics = training_results.trainer_output.metrics
+            training_results.trainer.save_metrics(split="train", metrics=metrics)
+            training_results.trainer.save_metrics(split="eval", metrics=metrics)
+            log_history = training_results.trainer.state.log_history
+            with open(f"{output_dir}/full_training_history.json", "w") as _o:
+                json.dump(log_history, _o, indent=2)
+            train_hist, eval_hist = self.parse_log_history(log_history=log_history)
+            self.create_training_metrics_plots(
+                train_hist=train_hist,
+                eval_hist=eval_hist,
+                output_dir=output_dir
+            )
+
+    @staticmethod
+    def evaluate_model(training_results: ModelTrainerOutput, dataset_dict: DatasetDict, output_dir: str):
+        eval_results = training_results.trainer.evaluate(dataset_dict[model_consts.TEST])
+        with open(f"{output_dir}/final_test_results.json", "w") as _o:
+            json.dump(eval_results, _o, indent=2)

@@ -75,4 +75,7 @@ class Pipe(BaseModel):
                     for i, expected_output in enumerate(execution_step.expected_outputs):
                         execution_step.outputs[expected_output] = execution_step_outputs[i]
                 else:
-                    raise ValueError
+                    raise ValueError(
+                        f"Execution step {execution_step.name} returned values but no expected outputs specified in "
+                        "config"
+                    )
