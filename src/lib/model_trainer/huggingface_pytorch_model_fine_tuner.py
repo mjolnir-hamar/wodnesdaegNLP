@@ -7,6 +7,7 @@ import pandas as pd
 from copy import deepcopy
 import matplotlib.pyplot as plt
 from typing import (
+    Union,
     Any,
     List,
     Tuple,
@@ -24,10 +25,14 @@ from transformers import (
     PreTrainedTokenizerFast,
     AutoTokenizer,
     AutoModelForTokenClassification,
+    AutoModelForSeq2SeqLM,
     TrainingArguments,
+    Seq2SeqTrainingArguments,
     Trainer,
+    Seq2SeqTrainer,
     DataCollator,
     DataCollatorForTokenClassification,
+    DataCollatorForSeq2Seq,
     BatchEncoding
 )
 
@@ -51,17 +56,26 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
     def __init__(self, task: str):
         super().__init__(task)
 
-    def convert_corpora_to_dataset(self, corpora: List[Corpus], shuffle_seed: int) -> Tuple[Dataset, ClassLabel]:
-
+    def convert_corpora_to_dataset(self, corpora: List[Corpus], shuffle_seed: int) -> Union[Dataset, Tuple[Dataset, ClassLabel]]:
+        """
+        Converts a Corpus object to an HuggingFace Dataset depending on modeling task
+        """
         if self.task == model_consts.POS_TAGGING:
             dataset, classmap = self.convert_corpora_to_pos_dataset(corpora=corpora)
+            dataset = dataset.shuffle(seed=shuffle_seed)
+            return dataset, classmap
+        elif self.task == model_consts.LEMMATIZATION:
+            dataset = self.convert_corpora_to_lemmatization_dataset(corpora=corpora)
+            dataset = dataset.shuffle(seed=shuffle_seed)
+            return dataset
         else:
-            raise NotImplementedError
-        dataset = dataset.shuffle(seed=shuffle_seed)
-        return dataset, classmap
+            raise NotImplementedError(f"Dataset conversion for task {self.task} is not supported")
 
     @staticmethod
     def convert_corpora_to_pos_dataset(corpora: List[Corpus]) -> Tuple[Dataset, ClassLabel]:
+        """
+        Converts a Corpus object to a Dataset for POS tagging
+        """
 
         dataset_raw: Dict = {
             model_consts.TEXT: [],
@@ -91,13 +105,56 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
         return dataset, classmap
 
     @staticmethod
+    def convert_corpora_to_lemmatization_dataset(corpora: List[Corpus]) -> Dataset:
+        """
+        Converts a Corpus object to a Dataset for lemmatization (Seq2Seq)
+        """
+
+        dataset_raw: Dict = {
+            model_consts.TEXT: [],
+            model_consts.NER_TAGS: [],
+            model_consts.LEMMAS: []
+        }
+
+        all_ner_tags: Set = set()
+
+        for corpus in corpora:
+            for sentence in corpus.sentences:
+                tokens: List[str] = []
+                ner_tags: List[str] = []
+                lemmas: List[str] = []
+                for word in sentence.words:
+                    tokens.append(word.text.lower())
+                    ner_tags.append(word.ner_tag.tag)
+                    lemmas.append(word.lemma.text.lower())
+                if len(tokens) == len(ner_tags) and len(tokens) == len(lemmas) and len(tokens) > 0:
+                    dataset_raw[model_consts.TEXT] += tokens
+                    dataset_raw[model_consts.NER_TAGS] += ner_tags
+                    dataset_raw[model_consts.LEMMAS] += lemmas
+                    all_ner_tags |= set(ner_tags)
+
+        dataset_raw[model_consts.TEXT_TAGS] = [
+            f"{text} {dataset_raw[model_consts.NER_TAGS][i]}" for i, text in enumerate(dataset_raw[model_consts.TEXT])
+        ]
+
+        logging.info(f"Loaded {len(dataset_raw[model_consts.TEXT])} tokens")
+
+        return Dataset.from_pandas(pd.DataFrame(data=dataset_raw))
+
+    @staticmethod
     def downsample_dataset(dataset: Dataset, max_dataset_size: int) -> Dataset:
+        """
+        Downsamples a Dataset to a target size
+        """
         if len(dataset) > max_dataset_size:
             return dataset.select(range(max_dataset_size))
         return dataset
 
     @staticmethod
     def train_test_val_split(dataset: Dataset, train_perc: float, test_perc: float) -> DatasetDict:
+        """
+        Splits a Dataset into train, test, and validation partitions
+        """
         test_val_size: float = 1.0 - train_perc
         val_size: float = 1.0 - (test_perc / test_val_size)
         train_test: DatasetDict = dataset.train_test_split(test_size=test_val_size)
@@ -116,18 +173,23 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
         return dataset_dict
 
     def load_pretrained_model_and_tokenizer(
-            self, model_location: str, classmap: ClassLabel
+            self, model_location: str, classmap: ClassLabel = None
     ) -> Tuple[PreTrainedTokenizerFast, Any]:
+        """
+        Loads a pretrained tokenizer and model
+        """
         tokenizer: PreTrainedTokenizerFast = AutoTokenizer.from_pretrained(model_location)
-        label2id: Dict[str, int] = deepcopy(classmap._str2int)
-        id2label: Dict[int, str] = {i: label for label, i in label2id.items()}
         if self.task == model_consts.POS_TAGGING:
+            label2id: Dict[str, int] = deepcopy(classmap._str2int)
+            id2label: Dict[int, str] = {i: label for label, i in label2id.items()}
             model: Any = AutoModelForTokenClassification.from_pretrained(
                 model_location,
                 num_labels=len(id2label.keys()),
                 id2label=id2label,
                 label2id=label2id
             )
+        elif self.task == model_consts.LEMMATIZATION:
+            model: Any = AutoModelForSeq2SeqLM.from_pretrained(model_location)
         else:
             raise NotImplementedError
 
@@ -136,9 +198,21 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
     def apply_tokenizer(
             self, tokenizer: PreTrainedTokenizerFast, dataset_dict: DatasetDict, max_seq_len: int
     ) -> DatasetDict:
+        """
+        Applies a tokenizer to a DatasetDict depending on the modeling task
+        """
         if self.task == model_consts.POS_TAGGING:
             return dataset_dict.map(
                 self.apply_tokenizer_for_pos_tagging,
+                batched=True,
+                fn_kwargs={
+                    model_consts.TOKENIZER: tokenizer,
+                    model_consts.MAX_SEQ_LEN: max_seq_len
+                }
+            )
+        elif self.task == model_consts.LEMMATIZATION:
+            return dataset_dict.map(
+                self.apply_tokenizer_for_lemmatization,
                 batched=True,
                 fn_kwargs={
                     model_consts.TOKENIZER: tokenizer,
@@ -153,6 +227,7 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
             examples: Dataset, tokenizer: PreTrainedTokenizerFast, max_seq_len: int
     ) -> BatchEncoding:
         """
+        Applies a tokenizer to a Dataset for POS tagging
         Based on align_labels_with_tokens from https://huggingface.co/learn/nlp-course/en/chapter7/2
         """
         tokenized_inputs: BatchEncoding = tokenizer(
@@ -180,13 +255,35 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
         tokenized_inputs["labels"] = labels
         return tokenized_inputs
 
+    @staticmethod
+    def apply_tokenizer_for_lemmatization(
+            examples: Dataset, tokenizer: PreTrainedTokenizerFast, max_seq_len: int
+    ) -> BatchEncoding:
+        """
+        Preps input and target data for lemmatization as Seq2Seq text generation training
+        """
+        inputs = examples["text_tags"]
+        targets = examples["lemmas"]
+        model_inputs = tokenizer(
+            inputs, text_target=targets, max_length=max_seq_len, truncation=True
+        )
+        return model_inputs
+
     def prepare_data_collator(self, tokenizer: PreTrainedTokenizerFast) -> DataCollator:
+        """
+        Creates DataCollator objects depending on modeling task
+        """
         if self.task == model_consts.POS_TAGGING:
             return DataCollatorForTokenClassification(tokenizer=tokenizer)
+        elif self.task == model_consts.LEMMATIZATION:
+            return DataCollatorForSeq2Seq(tokenizer=tokenizer)
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"Initializing data collator for task {self.task} not supported")
 
     def prepare_compute_metrics(self, label_list: List[str]) -> Any:
+        """
+        Prepares functions to compute metrics during model training
+        """
         if self.task == model_consts.POS_TAGGING:
             seqeval = evaluate.load("seqeval")
 
@@ -239,34 +336,62 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
             save_strategy: str = "epoch",
             logging_steps: int = 100
     ) -> ModelTrainerOutput:
-
-        training_args = TrainingArguments(
-            output_dir=output_dir,
-            learning_rate=learning_rate,
-            weight_decay=weight_decay,
-            per_device_train_batch_size=train_batch_size,
-            per_device_eval_batch_size=val_batch_size,
-            num_train_epochs=epochs,
-            evaluation_strategy=val_strategy,
-            save_strategy=save_strategy,
-            logging_steps=logging_steps,
-            push_to_hub=False
-        )
+        """
+        Trains the model
+        """
 
         data_collator = self.prepare_data_collator(tokenizer=tokenizer)
-        compute_metrics = self.prepare_compute_metrics(
-            label_list=dataset_dict[model_consts.TRAIN].features[model_consts.NER_TAGS].feature.names
-        )
 
-        trainer = Trainer(
-            model=model,
-            args=training_args,
-            train_dataset=dataset_dict[model_consts.TRAIN],
-            eval_dataset=dataset_dict[model_consts.VAL],
-            tokenizer=tokenizer,
-            data_collator=data_collator,
-            compute_metrics=compute_metrics
-        )
+        if self.task == model_consts.POS_TAGGING:
+            training_args = TrainingArguments(
+                output_dir=output_dir,
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+                per_device_train_batch_size=train_batch_size,
+                per_device_eval_batch_size=val_batch_size,
+                num_train_epochs=epochs,
+                evaluation_strategy=val_strategy,
+                save_strategy=save_strategy,
+                logging_steps=logging_steps,
+                push_to_hub=False
+            )
+
+            compute_metrics = self.prepare_compute_metrics(
+                label_list=dataset_dict[model_consts.TRAIN].features[model_consts.NER_TAGS].feature.names
+            )
+
+            trainer = Trainer(
+                model=model,
+                args=training_args,
+                train_dataset=dataset_dict[model_consts.TRAIN],
+                eval_dataset=dataset_dict[model_consts.VAL],
+                tokenizer=tokenizer,
+                data_collator=data_collator,
+                compute_metrics=compute_metrics
+            )
+        elif self.task == model_consts.LEMMATIZATION:
+            training_args = Seq2SeqTrainingArguments(
+                output_dir=output_dir,
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+                per_device_train_batch_size=train_batch_size,
+                per_device_eval_batch_size=val_batch_size,
+                num_train_epochs=epochs,
+                save_strategy=save_strategy,
+                logging_steps=logging_steps,
+                push_to_hub=False
+            )
+
+            trainer = Seq2SeqTrainer(
+                model=model,
+                args=training_args,
+                train_dataset=dataset_dict[model_consts.TRAIN],
+                eval_dataset=dataset_dict[model_consts.VAL],
+                tokenizer=tokenizer,
+                data_collator=data_collator
+            )
+        else:
+            raise NotImplementedError(f"Model training for task {self.task} is not supported.")
 
         training_results = trainer.train()
 
@@ -277,6 +402,9 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
 
     @staticmethod
     def parse_log_history(log_history: Dict) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Parses the training log and converts it to DataFrames
+        """
         train_hist = {"epoch": [], "loss": [], "learning_rate": []}
         eval_hist = {"epoch": [], "precision": [], "recall": [], "f1": [], "accuracy": []}
         for entry in log_history:
@@ -294,6 +422,9 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
 
     @staticmethod
     def create_training_metrics_plots(train_hist: pd.DataFrame, eval_hist: pd.DataFrame, output_dir: str):
+        """
+        Creates training metrics plots using the parsed training log
+        """
 
         plot_dir = f"{output_dir}/plots"
         if os.path.isdir(plot_dir):
@@ -330,6 +461,9 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
         fig.savefig(f"{plot_dir}/training_validation_metrics.png")
 
     def save_training_metrics(self, training_results: ModelTrainerOutput, output_dir: str):
+        """
+        Saves training metrics to disk
+        """
         if os.path.isdir(output_dir):
             metrics = training_results.trainer_output.metrics
             training_results.trainer.save_metrics(split="train", metrics=metrics)
@@ -346,6 +480,9 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
 
     @staticmethod
     def evaluate_model(training_results: ModelTrainerOutput, dataset_dict: DatasetDict, output_dir: str):
+        """
+        Runs model evaluation using the evaluation data stored with the Trainer object
+        """
         eval_results = training_results.trainer.evaluate(dataset_dict[model_consts.TEST])
         with open(f"{output_dir}/final_test_results.json", "w") as _o:
             json.dump(eval_results, _o, indent=2)
