@@ -4,7 +4,16 @@ from .text_entity import TextEntity
 
 
 class ModelPrediction(BaseModel):
+    pass
 
-    text: TextEntity
-    score: float
-    label: TextEntity
+
+class POSModelPrediction(ModelPrediction):
+
+    token: TextEntity
+    pos_score: float
+    pos_tag: TextEntity
+
+
+class LemmatizerModelPrediction(POSModelPrediction):
+
+    lemma: TextEntity

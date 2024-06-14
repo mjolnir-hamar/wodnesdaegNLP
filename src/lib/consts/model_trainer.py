@@ -1,6 +1,7 @@
 POS_TAGGING: str = "pos_tagging"
 LEMMATIZATION: str = "lemmatization"
 NER: str = "ner"
+TEXT_2_TEXT_GEN: str = "text2text-generation"
 
 TEXT: str = "text"
 NER_TAGS: str = f"{NER}_tags"
