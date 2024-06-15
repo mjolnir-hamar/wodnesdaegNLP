@@ -3,11 +3,7 @@ import glob
 import logging
 from tqdm import tqdm
 from lxml import etree
-from typing import (
-    Any,
-    List,
-    Dict
-)
+from typing import List
 
 from src.lib.data_types import (
     Token,
@@ -33,8 +29,8 @@ POSTAG = "postag"
 
 INVALID_POS_TAGS = {"-", "u"}
 
-class LatinTreebankPerseusCorpusExtractor(CorpusExtractor):
 
+class LatinTreebankPerseusCorpusExtractor(CorpusExtractor):
 
     @staticmethod
     def extract_sentences(xml_file: str):

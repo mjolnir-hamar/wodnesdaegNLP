@@ -1,5 +1,3 @@
-from typing import List
-
 import src.lib.consts.file_types as file_consts
 from src.lib.data_types import (
     File,
