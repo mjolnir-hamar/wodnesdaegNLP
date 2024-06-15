@@ -82,7 +82,7 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
         Lemmatizer model input requires POS tags
         """
         model_predictions: List[List[LemmatizerModelPrediction]] = []
-        for model_preds in tqdm(pos_model_predictions[:10], desc="Running lemmatizer inference..."):
+        for model_preds in tqdm(pos_model_predictions, desc="Running lemmatizer inference..."):
             sentence_preds: List[LemmatizerModelPrediction] = []
             for model_pred in model_preds:
                 lemma_input = f"{model_pred.token.text} {model_pred.pos_tag.text}"
@@ -135,3 +135,26 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
                     pos_score=float(pred["score"])
                 ))
         return final_output
+
+    @staticmethod
+    def print_lemmatizer_model_predictions(model_predictions: List[List[LemmatizerModelPrediction]]):
+        for sentence_model_predictions in model_predictions:
+            sentence = " ".join(
+                [token_model_prediction.token.text for token_model_prediction in sentence_model_predictions]
+            )
+            print(f"POS TAGGER AND LEMMATIZER PREDICTION FOR \"{sentence}\"")
+            for token_model_prediction in sentence_model_predictions:
+                print(
+                    f"Token: {token_model_prediction.token.text}\t"
+                    f"POS Tag: {token_model_prediction.pos_tag.text} ({token_model_prediction.pos_score})\t"
+                    f"Lemma: {token_model_prediction.lemma.text}"
+                )
+            print()
+
+    def print_model_predictions(self, model_predictions: List[List[ModelPrediction]]):
+        if self.task == model_consts.POS_TAGGING:
+            pass
+        elif self.task == model_consts.LEMMATIZATION:
+            self.print_lemmatizer_model_predictions(model_predictions=model_predictions)
+        else:
+            raise NotImplementedError(f"Printing model predictions for task \"{self.task}\" is not yet implemented.")
