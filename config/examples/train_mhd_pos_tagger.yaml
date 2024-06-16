@@ -1,0 +1,94 @@
+# Trains a part of speech tagger model for Middle High German using the Referenzkorpus Mittelhochdeutsch
+# Can be retrieved using the instructions on the associated CLTK page: https://github.com/cltk/middle_high_german_texts/tree/master
+
+# Create the pipeline
+pipeline:
+  # Add pipes
+  pipes:
+    # Pipe for data extraction using the RemXmlCorpusExtractor designed to pull data from
+    # Referenzkorpus Mittelhochdeutsch XMLs
+    - name: rem_extractor
+      output: extract_corpora.corpora
+      src_cls_name: RemXmlCorpusExtractor
+      execution_steps:
+        # Extract the data
+        - name: extract_corpora
+          args:
+            corpus_dir: # point to your extracted tar
+          expected_outputs: [corpora]
+        # Write the results out to a folder called mhd_pos_tagger.extracted_corpora to examine later
+        - name: write_corpora_to_file
+          args:
+            # Takes the output corpora from the extract_corpora execution_step above
+            corpora: extract_corpora.corpora
+            # Prefix for the output director
+            outdir: mhd_pos_tagger
+    # Pipe to train the model
+    - name: pos_model
+      src_cls_name: HuggingFacePytorchModelFineTuner
+      args:
+        # Global arg to set the modeling task
+        # This is a hard coded name; check src/lib/consts/model_trainer.py for others
+        task: pos_tagging
+      execution_steps:
+        # Convert the extracted corpora into an HF dataset object
+        - name: convert_corpora_to_dataset
+          args:
+            # Users the globally exposed output of the rem_extractor pipe above
+            corpora: rem_extractor.corpora
+            # Shuffle seed for HF dataset shuffling
+            shuffle_seed: 123
+          expected_outputs: [dataset, classmap]
+        # Split the dataset into a DatasetDict with a train, test, and validation partition
+        - name: train_test_val_split
+          args:
+            dataset: convert_corpora_to_dataset.dataset
+            # Set the train and test partition sizes
+            # Validation will be whatever is left
+            train_perc: 0.7
+            test_perc: 0.15
+          expected_outputs: [dataset_dict]
+        # Load the pretrained model and tokenizer from HFHub or locally
+        - name: load_pretrained_model_and_tokenizer
+          args:
+            # Using a BERT multilingual uncased base model here
+            # It is not trained on MHD but is trained on related languages; it works reasonably well
+            model_location: google-bert/bert-base-multilingual-uncased
+            classmap: convert_corpora_to_dataset.classmap
+          expected_outputs: [tokenizer, model]
+        # Apply the loaded tokenizer to the DatasetDict
+        - name: apply_tokenizer
+          args:
+            tokenizer: load_pretrained_model_and_tokenizer.tokenizer
+            dataset_dict: train_test_val_split.dataset_dict
+            # Maximum sequence length; this should be set to a number reasonable for your dataset and hardware
+            max_seq_len: 100
+          expected_outputs: [dataset_dict]
+        # Train the model
+        - name: train_model
+          # Most of HF Trainer's arguments are exposed for use here
+          # Check the definition for train_model in src/lib/model_trainer/huggingface_pytorch_model_fine_tuner
+          # for details
+          args:
+            dataset_dict: apply_tokenizer.dataset_dict
+            model: load_pretrained_model_and_tokenizer.model
+            tokenizer: load_pretrained_model_and_tokenizer.tokenizer
+            output_dir: mhd_pos_tagger
+            epochs: 4
+          expected_outputs: [training_results]
+        # Save training metrics including plots for:
+        # 1. learning rate
+        # 2. training loss
+        # 3. evaluation precision, recall, F1, & accuracy
+        # Saved to a plots folder in the output folder defined in the args to this execution_step
+        - name: save_training_metrics
+          args:
+            training_results: train_model.training_results
+            output_dir: mhd_pos_tagger
+        # Evaluates the final model using the test partition
+        # Saved to final_test_results.json in the output folder defined in the args to this execution_step
+        - name: evaluate_model
+          args:
+            training_results: train_model.training_results
+            dataset_dict: apply_tokenizer.dataset_dict
+            output_dir: mhd_pos_tagger
