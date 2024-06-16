@@ -1,5 +1,5 @@
 # Trains a part of speech tagger model for Middle High German using the Referenzkorpus Mittelhochdeutsch
-# Can be retrieved using the instructions on the associated CLTK page: https://github.com/cltk/middle_high_german_texts/tree/master
+# Data can be retrieved using the instructions on the associated CLTK page: https://github.com/cltk/middle_high_german_texts/tree/master
 
 # Create the pipeline
 pipeline:

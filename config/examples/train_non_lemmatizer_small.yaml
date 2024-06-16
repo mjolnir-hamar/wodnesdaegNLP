@@ -1,0 +1,83 @@
+# Trains a lemmatizer for Old Norse using IceCorpus
+# Data can be retrieved from https://github.com/antonkarl/icecorpus
+
+# Create the pipeline
+pipeline:
+  # Add pipes
+  pipes:
+    # Pipe for data extraction using the IceCorpusExtractor designed to pull data from IceCorpus grammars
+    - name: ice_corpus_extractor
+      output: consolidate_ner_tags.corpora
+      src_cls_name: IceCorpusExtractor
+      execution_steps:
+        # Extract the data
+        - name: extract_corpora
+          args:
+            corpus_dir: # point to the location of icecorpus/finished on your disk
+            keep_case_markings: false
+          expected_outputs: [corpora]
+    # Pipe to train the model
+    - name: lemma_model
+      src_cls_name: HuggingFacePytorchModelFineTuner
+      args:
+        # Global arg to set the modeling task
+        # This is a hard coded name; check src/lib/consts/model_trainer.py for others
+        task: lemmatization
+      execution_steps:
+        # Convert the extracted corpora into an HF dataset object
+        - name: convert_corpora_to_dataset
+          args:
+            # Users the globally exposed output of the ice_corpus_extractor pipe above
+            corpora: ice_corpus_extractor.corpora
+            # Shuffle seed for HF dataset shuffling
+            shuffle_seed: 123
+          expected_outputs: [dataset]
+        # Downsample the dataset
+        # This should be tuned to what your hardware is capable of considering the size of the foundation model
+        # you want to use
+        - name: downsample_dataset
+          args:
+            dataset: convert_corpora_to_dataset.dataset
+            # Set ot 500k total data points for this example
+            max_dataset_size: 500000
+          expected_outputs: [dataset]
+        # Split the dataset into a DatasetDict with a train, test, and validation partition
+        - name: train_test_val_split
+          args:
+            dataset: downsample_dataset.dataset
+            # Set the train and test partition sizes
+            # Validation will be whatever is left
+            train_perc: 0.8
+            test_perc: 0.10
+          expected_outputs: [ dataset_dict ]
+        # Load the pretrained model and tokenizer from HFHub or locally
+        - name: load_pretrained_model_and_tokenizer
+          args:
+            # Using an MT5 small model here
+            # It is not trained on NON but is trained on related languages; it works reasonably well
+            # The foundation model architecture here needs to be compatible with HF's AutoModelForSeq2SeqLM model class
+            model_location: google/mt5-small
+          expected_outputs: [tokenizer, model]
+        # Apply the loaded tokenizer to the DatasetDict
+        - name: apply_tokenizer
+          args:
+            tokenizer: load_pretrained_model_and_tokenizer.tokenizer
+            dataset_dict: train_test_val_split.dataset_dict
+            # Note the maximum sequence length here
+            # This model's input looks like this:
+            #   <token><space><POS tag>
+            # The sequence length is then the tokenized token (sub-word pieces) plus the tag, not the entire sentence
+            max_seq_len: 30
+          expected_outputs: [dataset_dict]
+        # Train the model
+        - name: train_model
+          # Most of HF Trainer's arguments are exposed for use here
+          # Check the definition for train_model in src/lib/model_trainer/huggingface_pytorch_model_fine_tuner
+          # for details
+          args:
+            dataset_dict: apply_tokenizer.dataset_dict
+            model: load_pretrained_model_and_tokenizer.model
+            tokenizer: load_pretrained_model_and_tokenizer.tokenizer
+            output_dir: ice_corpus_lemmatizer_small
+            epochs: 4
+          expected_outputs: [training_results]
