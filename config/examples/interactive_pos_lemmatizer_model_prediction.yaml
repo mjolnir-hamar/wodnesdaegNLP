@@ -19,7 +19,7 @@ pipeline:
       src_cls_name: HuggingFacePytorchModelPredictor
       args:
         # Global arg to set the modeling task
-        # This is a hard coded name; check src/lib/consts/model_trainer.py for others
+        # This is a hard coded name; check src/wodnesdaeg_nlp/consts/model_trainer.py for others
         task: pos_tagging
       execution_steps:
         # Create the HF pipeline object for inference
@@ -39,7 +39,7 @@ pipeline:
       src_cls_name: HuggingFacePytorchModelPredictor
       args:
         # Global arg to set the modeling task
-        # This is a hard coded name; check src/lib/consts/model_trainer.py for others
+        # This is a hard coded name; check src/wodnesdaeg_nlp/consts/model_trainer.py for others
         task: lemmatization
       execution_steps:
         # Create the HF pipeline object for inference

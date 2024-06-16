@@ -15,7 +15,7 @@ from transformers import (
     Pipeline
 )
 
-from src.lib.data_types import (
+from src.wodnesdaeg_nlp.data_types import (
     File,
     TextEntity,
     ModelPrediction,
@@ -23,7 +23,7 @@ from src.lib.data_types import (
     LemmatizerModelPrediction
 )
 from .model_predictor import ModelPredictor
-import src.lib.consts.model_trainer as model_consts
+import src.wodnesdaeg_nlp.consts.model_trainer as model_consts
 
 
 class HuggingFacePytorchModelPredictor(ModelPredictor):

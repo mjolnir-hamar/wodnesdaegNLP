@@ -5,16 +5,16 @@ from tqdm import tqdm
 from lxml import etree
 from typing import List
 
-from src.lib.data_types import (
+from src.wodnesdaeg_nlp.data_types import (
     Token,
     Lemma,
     NerTag,
     Sentence,
     Corpus
 )
-import src.lib.consts.args as args_consts
-import src.lib.consts.file_types as file_consts
-from src.lib.corpus_extractor import CorpusExtractor
+import src.wodnesdaeg_nlp.consts.args as args_consts
+import src.wodnesdaeg_nlp.consts.file_types as file_consts
+from src.wodnesdaeg_nlp.corpus_extractor import CorpusExtractor
 
 
 logger = logging.getLogger(__name__)

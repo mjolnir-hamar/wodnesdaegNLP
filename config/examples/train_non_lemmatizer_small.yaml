@@ -21,7 +21,7 @@ pipeline:
       src_cls_name: HuggingFacePytorchModelFineTuner
       args:
         # Global arg to set the modeling task
-        # This is a hard coded name; check src/lib/consts/model_trainer.py for others
+        # This is a hard coded name; check src/wodnesdaeg_nlp/consts/model_trainer.py for others
         task: lemmatization
       execution_steps:
         # Convert the extracted corpora into an HF dataset object
@@ -72,7 +72,7 @@ pipeline:
         # Train the model
         - name: train_model
           # Most of HF Trainer's arguments are exposed for use here
-          # Check the definition for train_model in src/lib/model_trainer/huggingface_pytorch_model_fine_tuner
+          # Check the definition for train_model in src/wodnesdaeg_nlp/model_trainer/huggingface_pytorch_model_fine_tuner
           # for details
           args:
             dataset_dict: apply_tokenizer.dataset_dict

@@ -1,10 +1,10 @@
 from typing import Dict, Any
 
-from src.lib.file_reader import *
-from src.lib.interactive_input_reader import *
-from src.lib.corpus_extractor import *
-from src.lib.model_trainer import *
-from src.lib.model_predictor import *
+from src.wodnesdaeg_nlp.file_reader import *
+from src.wodnesdaeg_nlp.interactive_input_reader import *
+from src.wodnesdaeg_nlp.corpus_extractor import *
+from src.wodnesdaeg_nlp.model_trainer import *
+from src.wodnesdaeg_nlp.model_predictor import *
 
 
 SRC_CLS_REGISTRY: Dict[str, Any] = {

@@ -5,7 +5,7 @@ from typing import (
 )
 
 from .pipeline import Pipeline
-import src.lib.consts.pipeline as pipeline_consts
+import src.wodnesdaeg_nlp.consts.pipeline as pipeline_consts
 
 
 class PipelineExecutor:

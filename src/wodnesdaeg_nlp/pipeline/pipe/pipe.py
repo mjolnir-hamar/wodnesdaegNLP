@@ -9,7 +9,7 @@ from typing import (
     Dict
 )
 
-from src.lib.pipeline.src_cls_registry import SRC_CLS_REGISTRY
+from src.wodnesdaeg_nlp.pipeline.src_cls_registry import SRC_CLS_REGISTRY
 
 
 logger = logging.getLogger()
