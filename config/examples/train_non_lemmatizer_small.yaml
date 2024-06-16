@@ -49,7 +49,7 @@ pipeline:
             # Validation will be whatever is left
             train_perc: 0.8
             test_perc: 0.10
-          expected_outputs: [ dataset_dict ]
+          expected_outputs: [dataset_dict]
         # Load the pretrained model and tokenizer from HFHub or locally
         - name: load_pretrained_model_and_tokenizer
           args:

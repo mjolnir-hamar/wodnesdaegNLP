@@ -1,0 +1,60 @@
+# Runs chained POS tagger and lemmatizer inference
+
+# Create the pipeline
+pipeline:
+  # Add pipes
+  pipes:
+    # Pipe to get input from the user at the command line
+    # This will prompt the user with "Sentence: " in the terminal
+    - name: get_user_input
+      output: read_input_into_file.user_input
+      src_cls_name: InteractiveInputReader
+      execution_steps:
+        - name: read_input_into_file
+          args: {}
+          expected_outputs: [user_input]
+    # Get POS model prediction
+    - name: pos_model_pred
+      output: run_inference.model_predictions
+      src_cls_name: HuggingFacePytorchModelPredictor
+      args:
+        # Global arg to set the modeling task
+        # This is a hard coded name; check src/lib/consts/model_trainer.py for others
+        task: pos_tagging
+      execution_steps:
+        # Create the HF pipeline object for inference
+        - name: create_model_pipeline
+          args:
+            model_location: # point to your trained POS tagger
+          expected_outputs: [pipeline]
+        # Run inference using your POS tagger
+        - name: run_inference
+          args:
+            cls: create_model_pipeline.pipeline
+            file_lines: get_user_input.user_input
+          expected_outputs: [model_predictions]
+    # Get lemmatizer model prediction
+    - name: lemma_model_pred
+      output: run_inference.model_predictions
+      src_cls_name: HuggingFacePytorchModelPredictor
+      args:
+        # Global arg to set the modeling task
+        # This is a hard coded name; check src/lib/consts/model_trainer.py for others
+        task: lemmatization
+      execution_steps:
+        # Create the HF pipeline object for inference
+        - name: create_model_pipeline
+          args:
+            model_location: # point to your trained lemmatizer
+          expected_outputs: [pipeline]
+        # Run inference using your lemmatizer
+        - name: run_inference
+          args:
+            cls: create_model_pipeline.pipeline
+            pos_model_predictions: pos_model_pred.model_predictions
+          expected_outputs: [model_predictions]
+        # Print the results to the terminal in the following format (1 line per token in the input):
+        #   <original token>  <POS Tag> (<POS Model Conf. Score>)   <Lemma>
+        - name: print_model_predictions
+          args:
+            model_predictions: run_inference.model_predictions
