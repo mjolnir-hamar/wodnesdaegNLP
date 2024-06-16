@@ -12,6 +12,8 @@ Each `execution_step` has its own arguments (`args`) and `expected_output`.
 1 output from 1 `execution_step` can then be exposed to the rest of the `pipeline` as the main output for that `pipe`.
 This allows other downstream `pipes` to use that output as input to 1 or more of their `execution_steps`.
 
+Check `config/examples` to see how configs are set up.
+
 ### Data Prep
 
 WodnesdaegNLP's `CorpusExtractor` class is the primary way by which raw data is preprocessed in preparation for model training and testing.
