@@ -5,13 +5,19 @@ from typing import (
 )
 
 from .pipeline import Pipeline
-import src.wodnesdaeg_nlp.consts.pipeline as pipeline_consts
+import wodnesdaeg_nlp.consts.pipeline as pipeline_consts
+
 
 
 class PipelineExecutor:
 
-    def __init__(self, yaml_config_file: str):
-        self._read_config(yaml_config_file=yaml_config_file)
+    def __init__(self, yaml_config_file: str = None, preloaded_config: dict = None):
+        if yaml_config_file is not None:
+            self._read_config(yaml_config_file=yaml_config_file)
+        elif preloaded_config is not None:
+            self.pipeline_config = preloaded_config
+        else:
+            raise RuntimeError("No valid config was received")
         self._build()
 
     def _read_config(self, yaml_config_file: str):

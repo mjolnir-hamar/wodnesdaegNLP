@@ -1,5 +1,5 @@
-import src.wodnesdaeg_nlp.consts.file_types as file_consts
-from src.wodnesdaeg_nlp.data_types import (
+import wodnesdaeg_nlp.consts.file_types as file_consts
+from wodnesdaeg_nlp.data_types import (
     File,
     FileLine
 )

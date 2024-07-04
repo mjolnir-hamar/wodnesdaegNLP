@@ -15,7 +15,7 @@ from transformers import (
     Pipeline
 )
 
-from src.wodnesdaeg_nlp.data_types import (
+from wodnesdaeg_nlp.data_types import (
     File,
     TextEntity,
     ModelPrediction,
@@ -23,7 +23,7 @@ from src.wodnesdaeg_nlp.data_types import (
     LemmatizerModelPrediction
 )
 from .model_predictor import ModelPredictor
-import src.wodnesdaeg_nlp.consts.model_trainer as model_consts
+import wodnesdaeg_nlp.consts.model_trainer as model_consts
 
 
 class HuggingFacePytorchModelPredictor(ModelPredictor):
@@ -158,3 +158,33 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
             self.print_lemmatizer_model_predictions(model_predictions=model_predictions)
         else:
             raise NotImplementedError(f"Printing model predictions for task \"{self.task}\" is not yet implemented.")
+
+    @staticmethod
+    def write_lemmatizer_model_predictions(model_predictions: List[List[LemmatizerModelPrediction]], output_fname: str):
+        model_output_json = []
+        for sentence_model_predictions in model_predictions:
+            sentence = " ".join(
+                [token_model_prediction.token.text for token_model_prediction in sentence_model_predictions]
+            ).strip()
+            sentence_output_json = {"sentence": sentence, "token_predictions": []}
+            for token_model_prediction in sentence_model_predictions:
+                sentence_output_json["token_predictions"].append({
+                    "token": token_model_prediction.token.text.strip(),
+                    "pos_tag": {
+                        "tag": token_model_prediction.pos_tag.text,
+                        "score":token_model_prediction.pos_score
+                    },
+                    "lemma": token_model_prediction.lemma.text
+                })
+            model_output_json.append(sentence_output_json)
+        with open(output_fname, "w") as _o:
+            json.dump(model_output_json, _o, indent=2)
+
+
+    def write_model_predictions(self, model_predictions: List[List[ModelPrediction]], output_fname: str):
+        if self.task == model_consts.POS_TAGGING:
+            pass
+        elif self.task == model_consts.LEMMATIZATION:
+            self.write_lemmatizer_model_predictions(model_predictions=model_predictions, output_fname=output_fname)
+        else:
+            raise NotImplementedError(f"Writing model predictions for task \"{self.task}\" is not yet implemented.")

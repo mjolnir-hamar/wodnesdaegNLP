@@ -9,7 +9,7 @@ from typing import (
     Dict
 )
 
-from src.wodnesdaeg_nlp.data_types import (
+from wodnesdaeg_nlp.data_types import (
     Token,
     Lemma,
     NerTag,

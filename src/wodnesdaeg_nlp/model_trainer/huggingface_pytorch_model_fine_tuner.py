@@ -36,12 +36,12 @@ from transformers import (
     BatchEncoding
 )
 
-from src.wodnesdaeg_nlp.data_types import (
+from wodnesdaeg_nlp.data_types import (
     Corpus,
     ModelTrainerOutput
 )
 from .model_trainer import ModelTrainer
-import src.wodnesdaeg_nlp.consts.model_trainer as model_consts
+import wodnesdaeg_nlp.consts.model_trainer as model_consts
 
 
 logger = logging.getLogger(__name__)
