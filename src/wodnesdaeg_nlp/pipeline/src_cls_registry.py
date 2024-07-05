@@ -11,6 +11,7 @@ SRC_CLS_REGISTRY: Dict[str, Any] = {
     "FlatFileReader": FlatFileReader,
     "InteractiveInputReader": InteractiveInputReader,
     "CorpusExtractor": CorpusExtractor,
+    "CorpusJoiner": CorpusJoiner,
     "IceCorpusExtractor": IceCorpusExtractor,
     "ISWOCTreebankCorpusExtractor": ISWOCTreebankCorpusExtractor,
     "LatinTreebankPerseusCorpusExtractor": LatinTreebankPerseusCorpusExtractor,

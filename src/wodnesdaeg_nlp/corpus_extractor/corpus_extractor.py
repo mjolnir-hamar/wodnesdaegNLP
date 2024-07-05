@@ -20,13 +20,15 @@ from wodnesdaeg_nlp.data_types import (
 
 logger = logging.getLogger(__name__)
 
-OUTDIR_SUFFIX: str = ".extracted_corpora"
-
 
 class CorpusExtractor:
 
+    OUTDIR_SUFFIX: str = ".extracted_corpora"
+
     def extract_corpora(self, **kwargs):
-        raise NotImplementedError
+        raise NotImplementedError(
+            "Base \"CorpusExtractor\" cannot extract corpora, itself; use a dataset specific child class"
+        )
 
     @staticmethod
     def load_precomputed_corpora(precomputed_corpus_dir: str) -> List[Corpus]:
@@ -94,11 +96,9 @@ class CorpusExtractor:
 
         return corpora
 
+    def write_corpora_to_file(self, corpora: List[Corpus], outdir: str):
 
-    @staticmethod
-    def write_corpora_to_file(corpora: List[Corpus], outdir: str):
-
-        outdir = f"{outdir}{OUTDIR_SUFFIX}"
+        outdir = f"{outdir}{self.OUTDIR_SUFFIX}"
         if os.path.isdir(outdir):
             shutil.rmtree(outdir)
         os.mkdir(outdir)

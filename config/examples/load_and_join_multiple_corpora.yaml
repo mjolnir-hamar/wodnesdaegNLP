@@ -1,0 +1,71 @@
+# Load 2 corpora from different sources, then combine them into 1 data source
+
+# Create the pipeline
+pipeline:
+  # Add pipes
+  pipes:
+    # Pipe for data extraction using ISWOCTreebankCorpusExtractor designed to pull Old English data from
+    # ISWOC Corpus
+    - name: iswoc_treebank_corpus_extractor
+      output: extract_corpora.corpora
+      src_cls_name: ISWOCTreebankCorpusExtractor
+      execution_steps:
+        # Extract the data
+        - name: extract_corpora
+          args:
+            corpus_dir: # point to your data download
+            language: ang
+          expected_outputs: [corpora]
+        # Write the results out to a folder called orig_iswoc.extracted_corpora
+        # This will let us compare the joined corpora later
+        - name: write_corpora_to_file
+          args:
+            # Takes the output corpora from this pipe's extract_corpora execution_step
+            corpora: extract_corpora.corpora
+            # Prefix for the output directory
+            outdir: orig_iswoc
+    # Pipe for data extraction using LatinTreebankPerseusCorpusExtractor designed to pull data from
+    # Latin Treebank Corpus
+    - name: latin_treebank_perseus_extractor
+      output: extract_corpora.corpora
+      src_cls_name: LatinTreebankPerseusCorpusExtractor
+      execution_steps:
+        # Extract the data
+        - name: extract_corpora
+          args:
+            corpus_dir: # point to your data download
+            keep_case_markings: false
+          expected_outputs: [corpora]
+        # Write out for later comparison
+        - name: write_corpora_to_file
+          args:
+            corpora: extract_corpora.corpora
+            outdir: orig_latin_treebank_perseus
+    # Pipe to join multiple corpora together
+    - name: join_corpora
+      output: join_corpora.corpora
+      src_cls_name: CorpusJoiner
+      execution_steps:
+        # Join the corpora
+        - name: join_corpora
+          args:
+            # This pipe has 3 options for balancing sentences in the individual corpora once combined
+            # Only 1 can be set
+            # If none of the 3 is set, no the pipe will perform no balancing at all
+            # - sampling_target: ## <- down/upsamples each corpus' sentence set to a specific target
+            # - downsample_to_smallest: true <- downsamples the largest corpus to the sentence count of the smallest
+            # - upsample_to_largest: true <- upsamples the smallest corpus to the sentence count of the largest
+
+            # Dictionary listing the corpora to join
+            # Format is {
+            #   arbitrary_name: <pointer to the corpus from earlier pipes>
+            # }
+            corpora_to_join:
+              ang: iswoc_treebank_corpus_extractor.corpora
+              lat: latin_treebank_perseus_extractor.corpora
+          expected_outputs: [corpora]
+      # Write the results
+        - name: write_corpora_to_file
+          args:
+            corpora: join_corpora.corpora
+            outdir: test_joined_corpora

@@ -21,7 +21,7 @@ pipeline:
           args:
             # Takes the output corpora from the extract_corpora execution_step above
             corpora: extract_corpora.corpora
-            # Prefix for the output director
+            # Prefix for the output directory
             outdir: mhd_pos_tagger
     # Pipe to train the model
     - name: pos_model
