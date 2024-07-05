@@ -12,6 +12,7 @@ SRC_CLS_REGISTRY: Dict[str, Any] = {
     "InteractiveInputReader": InteractiveInputReader,
     "CorpusExtractor": CorpusExtractor,
     "IceCorpusExtractor": IceCorpusExtractor,
+    "ISWOCTreebankCorpusExtractor": ISWOCTreebankCorpusExtractor,
     "LatinTreebankPerseusCorpusExtractor": LatinTreebankPerseusCorpusExtractor,
     "RemXmlCorpusExtractor": RemXmlCorpusExtractor,
     "HuggingFacePytorchModelFineTuner": HuggingFacePytorchModelFineTuner,

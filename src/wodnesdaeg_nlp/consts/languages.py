@@ -1,7 +1,9 @@
 NON = "non"
 MHD = "mhd"
+ANG = "ang"
 
 LANGUAGES = {
     NON,
-    MHD
+    MHD,
+    ANG
 }
