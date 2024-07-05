@@ -60,9 +60,18 @@ pipeline:
             # Format is {
             #   arbitrary_name: <pointer to the corpus from earlier pipes>
             # }
+            sampling_target: 100
             corpora_to_join:
               ang: iswoc_treebank_corpus_extractor.corpora
               lat: latin_treebank_perseus_extractor.corpora
+            # Optionally, the follow argument can be set if sampling_target is used
+            # This argument will portion the sampling_target amount based on the percentages specified
+            # In this example, the joined corpus will contain:
+            # - 80 Old English sentences (100 * 0.8)
+            # - 20 Latin sentences (100 * 0.2)
+            sampling_portion_split:
+              ang: 0.8
+              lat: 0.2
           expected_outputs: [corpora]
       # Write the results
         - name: write_corpora_to_file
