@@ -16,7 +16,9 @@ from transformers import (
     Pipeline
 )
 from peft import PeftModel
+from tabulate import tabulate
 
+from wodnesdaeg_nlp.util import TermColor
 from wodnesdaeg_nlp.data_types import (
     File,
     TextEntity,
@@ -152,13 +154,31 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
             sentence = " ".join(
                 [token_model_prediction.token.text for token_model_prediction in sentence_model_predictions]
             )
-            print(f"POS TAGGER AND LEMMATIZER PREDICTION FOR \"{sentence}\"")
+            print(
+                f"{TermColor.BOLD}{TermColor.UNDERLINE}POS TAGGER AND LEMMATIZER PREDICTION FOR "
+                f"\"{sentence}\"{TermColor.END}"
+            )
+            output_table = [
+                [
+                    f"{TermColor.BOLD}Token{TermColor.END}",
+                    f"{TermColor.BOLD}POS Tag (Conf. Score){TermColor.END}",
+                    f"{TermColor.BOLD}Lemma{TermColor.END}"
+                ]
+            ]
             for token_model_prediction in sentence_model_predictions:
-                print(
-                    f"Token: {token_model_prediction.token.text}\t"
-                    f"POS Tag: {token_model_prediction.pos_tag.text} ({token_model_prediction.pos_score})\t"
-                    f"Lemma: {token_model_prediction.lemma.text}"
-                )
+                pos_score = token_model_prediction.pos_score
+                if pos_score >= 0.85:
+                    pos_score = f"{TermColor.GREEN}{pos_score}{TermColor.END}"
+                elif pos_score >= 0.5:
+                    pos_score = f"{TermColor.YELLOW}{pos_score}{TermColor.END}"
+                else:
+                    pos_score = f"{TermColor.RED}{pos_score}{TermColor.END}"
+                output_table.append([
+                    token_model_prediction.token.text,
+                    f"{token_model_prediction.pos_tag.text} ({pos_score})",
+                    token_model_prediction.lemma.text
+                ])
+            print(tabulate(output_table, headers="firstrow"))
             print()
 
     def print_model_predictions(self, model_predictions: List[List[ModelPrediction]]):
