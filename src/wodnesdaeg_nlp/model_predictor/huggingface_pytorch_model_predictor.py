@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import (
     Any,
     List,
@@ -14,6 +15,7 @@ from transformers import (
     pipeline,
     Pipeline
 )
+from peft import PeftModel
 
 from wodnesdaeg_nlp.data_types import (
     File,
@@ -26,12 +28,15 @@ from .model_predictor import ModelPredictor
 import wodnesdaeg_nlp.consts.model_trainer as model_consts
 
 
+logger = logging.getLogger(__name__)
+
+
 class HuggingFacePytorchModelPredictor(ModelPredictor):
 
     def __init__(self, task: str):
         super().__init__(task)
 
-    def load_pretrained_model_and_tokenizer(self, model_location: str) -> Tuple[PreTrainedTokenizerFast, Any]:
+    def load_pretrained_model_and_tokenizer(self, model_location: str, is_lora: bool = False) -> Tuple[PreTrainedTokenizerFast, Any]:
         """
         Loads a model and tokenizer for model inference
         """
@@ -42,13 +47,18 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
             model = AutoModelForSeq2SeqLM.from_pretrained(model_location)
         else:
             raise NotImplementedError
+
+        if is_lora:
+            logger.info("Loading a LoRA model")
+            model = PeftModel.from_pretrained(model, model_location)
+
         return tokenizer, model
 
-    def create_model_pipeline(self, model_location: str) -> Pipeline:
+    def create_model_pipeline(self, model_location: str, is_lora: bool = False) -> Pipeline:
         """
         Creates a HuggingFace pipeline object for a specific model inference task
         """
-        tokenizer, model = self.load_pretrained_model_and_tokenizer(model_location=model_location)
+        tokenizer, model = self.load_pretrained_model_and_tokenizer(model_location=model_location, is_lora=is_lora)
         if self.task == model_consts.POS_TAGGING:
             cls_task = model_consts.NER
         elif self.task == model_consts.LEMMATIZATION:

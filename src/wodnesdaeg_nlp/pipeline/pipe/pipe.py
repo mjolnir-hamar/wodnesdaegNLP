@@ -20,7 +20,7 @@ EXECUTION_STEP_NAME_OUTPUT_REGEX: re.Pattern = re.compile(r"^[a-z_]+\.[a-z_]+$")
 class ExecutionStep(BaseModel):
 
     name: str
-    args: Dict[str, Union[str, int, float, bool]]
+    args: Dict[str, Union[str, int, float, bool, Dict[str, Any]]]
     expected_outputs: Optional[List[str]] = []
     outputs: Dict[str, Any] = {}
 

@@ -12,7 +12,8 @@ from typing import (
     List,
     Tuple,
     Set,
-    Dict
+    Dict,
+    Literal
 )
 import evaluate
 from datasets import (
@@ -34,6 +35,11 @@ from transformers import (
     DataCollatorForTokenClassification,
     DataCollatorForSeq2Seq,
     BatchEncoding
+)
+from peft import (
+    get_peft_model,
+    TaskType,
+    LoraConfig
 )
 
 from wodnesdaeg_nlp.data_types import (
@@ -173,11 +179,12 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
         return dataset_dict
 
     def load_pretrained_model_and_tokenizer(
-            self, model_location: str, classmap: ClassLabel = None
+            self, model_location: str, classmap: ClassLabel = None, is_lora: bool = False, lora_params=None
     ) -> Tuple[PreTrainedTokenizerFast, Any]:
         """
         Loads a pretrained tokenizer and model
         """
+
         tokenizer: PreTrainedTokenizerFast = AutoTokenizer.from_pretrained(model_location)
         if self.task == model_consts.POS_TAGGING:
             label2id: Dict[str, int] = deepcopy(classmap._str2int)
@@ -193,7 +200,52 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
         else:
             raise NotImplementedError
 
+        if is_lora:
+            if lora_params is not None:
+                logger.info(f"Setting up LoRA with user-defined params plus defaults: {lora_params}")
+                model = self.convert_model_to_lora(model, **lora_params)
+            else:
+                logger.info(f"Setting up LoRA with only default params")
+                model = self.convert_model_to_lora(model)
+
         return tokenizer, model
+
+    def task_to_lora_task_type(self):
+        if self.task == model_consts.POS_TAGGING:
+            return TaskType.TOKEN_CLS
+        elif self.task == model_consts.LEMMATIZATION:
+            return TaskType.SEQ_2_SEQ_LM
+        else:
+            raise NotImplementedError(f"LoRA not yet implemented for \"{self.task}\"")
+
+    def convert_model_to_lora(
+            self,
+            model: Any,
+            rank: int = 16,
+            lora_alpha: int = 16,
+            lora_dropout: float = 0.1,
+            bias: Literal["none", "lora_only", "all"] = "none"
+    ) -> Any:
+
+        peft_config = LoraConfig(
+            task_type=self.task_to_lora_task_type(),
+            inference_mode=False,
+            r=rank,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            bias=bias
+        )
+
+        model = get_peft_model(model, peft_config)
+        model.print_trainable_parameters()
+        trainable_params, all_params = model.get_nb_trainable_parameters()
+        logger.info(
+            f"Trainable parameters: {trainable_params} | "
+            f"All parameters: {all_params} | "
+            f"Perc. trainable: {trainable_params / all_params}"
+        )
+
+        return model
 
     def apply_tokenizer(
             self, tokenizer: PreTrainedTokenizerFast, dataset_dict: DatasetDict, max_seq_len: int
