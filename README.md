@@ -27,6 +27,7 @@ Each has an associated dataset that's readily discoverable through the CLTK repo
 |IceCorpusExtractor| Old Norse          |
 |LatinTreeBankPerseusCorpusExtractor| Latin              |
 |REMXMLCorpusExtractor| Middle High German |
+|ISWOCTreebankCorpusExtractor| Old English |
 
 All extractors process data into a standard 3-column TSV format containing the foloowing:
 1. Original sentence
