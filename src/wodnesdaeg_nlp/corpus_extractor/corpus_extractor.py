@@ -80,7 +80,11 @@ class CorpusExtractor:
         return corpora
 
     @staticmethod
-    def consolidate_ner_tags(corpora: List[Corpus], ner_tag_config_file: str) -> List[Corpus]:
+    def consolidate_ner_tags(
+            corpora: List[Corpus],
+            ner_tag_config_file: str,
+            fail_on_missing_tag_mapping: bool = False
+    ) -> List[Corpus]:
 
         with open(ner_tag_config_file, "r") as _j:
             ner_tag_config: [Dict[str, str]] = json.load(_j)
@@ -92,7 +96,10 @@ class CorpusExtractor:
                     try:
                         word.ner_tag.tag = ner_tag_config[orig_ner_tag]
                     except KeyError:
-                        logger.warning(f"NER tag {orig_ner_tag} not found in {ner_tag_config_file}")
+                        if not fail_on_missing_tag_mapping:
+                            logger.warning(f"NER tag {orig_ner_tag} not found in {ner_tag_config_file}")
+                        else:
+                            raise KeyError(f"NER tag {orig_ner_tag} not found in {ner_tag_config_file}")
 
         return corpora
 

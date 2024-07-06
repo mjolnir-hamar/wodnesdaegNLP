@@ -445,6 +445,8 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
         else:
             raise NotImplementedError(f"Model training for task {self.task} is not supported.")
 
+        dataset_dict.save_to_disk(f"{output_dir}/train_test_val_data")
+
         training_results = trainer.train()
 
         return ModelTrainerOutput(
