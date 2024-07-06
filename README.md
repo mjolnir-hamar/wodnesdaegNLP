@@ -58,3 +58,17 @@ POS tagger inference reports the POS tags per token and associated model confide
 Lemmatizer inference requires POS tags first, and so input must first run through a POS tagger or already have POS tags.
 
 Input to inference can be either a file (using `FlatFileReader`) or interactive at the command line (using `InteractiveInputReader`).
+
+## Installation
+
+**NOTE: WodnesdaegNLP was developed on an Apple Silicon Mac. The installation instructions are for this kind of machine. If you do not have one of these computers, you'll need to adjust accordingly, including the package versions in `requirements.txt`**
+
+1. Install [Anaconda](https://www.anaconda.com/download/)
+2. Create a conda environment using:
+    - `python 3.11`
+    - The `requirements.txt` file included in this repo
+    - The following conda channels in the exact listed order (can be set using a `.condarc` file)
+      1. `conda-forge`
+      2. `pytorch-nightly`
+      3. `defaults`
+3. Set your `PYTHONPATH` to `WodnesdaegNLP/src`
