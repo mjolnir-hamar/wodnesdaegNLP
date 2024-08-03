@@ -1,0 +1,25 @@
+# v1
+# This tag set is an attempt to unify the IceCorpus and ISWOC tag sets into something
+# simple and custom. It's not meant to capture all levels of syntactic and semantic
+# complexity, just to create a small tag set for modeling and non-linguist use.
+
+tags:
+  ADJ: Adjective
+  ADV: Adverb
+  VERB: Verb
+  CONJ: Conjunction
+  DET: Determiner
+  DEM: Demonstrative Pronoun
+  INDEF: Indefinite Article
+  FOREIGN: Foreign Loanword
+  NOUN: Noun
+  NUM: Number
+  INTJ: Interjection
+  PREP: Preposition
+  PRO: Pronoun
+  NEG: Negation
+  TO: Infinitive Marker
+  QUANT: Quantifier
+  WWORD: Question Word
+  SUBJ: Subjunction
+  X: Unmapped
