@@ -51,7 +51,7 @@ pipeline:
           args:
             # This pipe has 3 options for balancing sentences in the individual corpora once combined
             # Only 1 can be set
-            # If none of the 3 is set, no the pipe will perform no balancing at all
+            # If none of the 3 is set, the pipe will perform no balancing at all
             # - sampling_target: ## <- down/upsamples each corpus' sentence set to a specific target
             # - downsample_to_smallest: true <- downsamples the largest corpus to the sentence count of the smallest
             # - upsample_to_largest: true <- upsamples the smallest corpus to the sentence count of the largest
@@ -64,7 +64,7 @@ pipeline:
             corpora_to_join:
               ang: iswoc_treebank_corpus_extractor.corpora
               lat: latin_treebank_perseus_extractor.corpora
-            # Optionally, the follow argument can be set if sampling_target is used
+            # Optionally, the following argument can be set if sampling_target is used
             # This argument will portion the sampling_target amount based on the percentages specified
             # In this example, the joined corpus will contain:
             # - 80 Old English sentences (100 * 0.8)
