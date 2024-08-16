@@ -27,6 +27,7 @@ from transformers import (
     AutoTokenizer,
     AutoModelForTokenClassification,
     AutoModelForSeq2SeqLM,
+    AutoModelForCausalLM,
     TrainingArguments,
     Seq2SeqTrainingArguments,
     Trainer,
@@ -34,6 +35,7 @@ from transformers import (
     DataCollator,
     DataCollatorForTokenClassification,
     DataCollatorForSeq2Seq,
+    DataCollatorForLanguageModeling,
     BatchEncoding
 )
 from peft import (
@@ -72,6 +74,10 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
             return dataset, classmap
         elif self.task == model_consts.LEMMATIZATION:
             dataset = self.convert_corpora_to_lemmatization_dataset(corpora=corpora)
+            dataset = dataset.shuffle(seed=shuffle_seed)
+            return dataset
+        elif self.task == model_consts.LEMMATIZATION_CAUSAL_LM:
+            dataset = self.convert_corpora_to_lemmatization_causal_lm_dataset(corpora=corpora)
             dataset = dataset.shuffle(seed=shuffle_seed)
             return dataset
         else:
@@ -148,6 +154,43 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
         return Dataset.from_pandas(pd.DataFrame(data=dataset_raw))
 
     @staticmethod
+    def convert_corpora_to_lemmatization_causal_lm_dataset(corpora: List[Corpus]) -> Dataset:
+        """
+        Converts a Corpus object to a Dataset for lemmatization (Causal LM)
+        """
+
+        dataset_raw: Dict = {
+            model_consts.TEXT: [],
+            model_consts.NER_TAGS: [],
+            model_consts.LEMMAS: []
+        }
+
+        all_ner_tags: Set = set()
+
+        for corpus in corpora:
+            for sentence in corpus.sentences:
+                tokens: List[str] = []
+                ner_tags: List[str] = []
+                lemmas: List[str] = []
+                for word in sentence.words:
+                    tokens.append(word.text.lower())
+                    ner_tags.append(word.ner_tag.tag)
+                    lemmas.append(word.lemma.text.lower())
+                if len(tokens) == len(ner_tags) and len(tokens) == len(lemmas) and len(tokens) > 0:
+                    dataset_raw[model_consts.TEXT] += tokens
+                    dataset_raw[model_consts.NER_TAGS] += ner_tags
+                    dataset_raw[model_consts.LEMMAS] += lemmas
+                    all_ner_tags |= set(ner_tags)
+
+        dataset_raw[model_consts.TEXT_TAGS] = [
+            f"{text} {dataset_raw[model_consts.NER_TAGS][i]} <lemma> {dataset_raw[model_consts.LEMMAS][i]} </lemma>" for i, text in enumerate(dataset_raw[model_consts.TEXT])
+        ]
+
+        logging.info(f"Loaded {len(dataset_raw[model_consts.TEXT])} tokens")
+
+        return Dataset.from_pandas(pd.DataFrame(data=dataset_raw))
+
+    @staticmethod
     def downsample_dataset(dataset: Dataset, max_dataset_size: int) -> Dataset:
         """
         Downsamples a Dataset to a target size
@@ -197,6 +240,9 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
             )
         elif self.task == model_consts.LEMMATIZATION:
             model: Any = AutoModelForSeq2SeqLM.from_pretrained(model_location)
+        elif self.task == model_consts.LEMMATIZATION_CAUSAL_LM:
+            tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+            model: Any = AutoModelForCausalLM.from_pretrained(model_location)
         else:
             raise NotImplementedError
 
@@ -271,6 +317,15 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
                     model_consts.MAX_SEQ_LEN: max_seq_len
                 }
             )
+        elif self.task == model_consts.LEMMATIZATION_CAUSAL_LM:
+            return dataset_dict.map(
+                self.apply_tokenizer_for_lemmatization_causal_lm,
+                batched=True,
+                fn_kwargs={
+                    model_consts.TOKENIZER: tokenizer,
+                    model_consts.MAX_SEQ_LEN: max_seq_len
+                }
+            )
         else:
             raise NotImplementedError
 
@@ -321,6 +376,17 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
         )
         return model_inputs
 
+    @staticmethod
+    def apply_tokenizer_for_lemmatization_causal_lm(
+            examples: Dataset, tokenizer: PreTrainedTokenizerFast, max_seq_len: int
+    ) -> BatchEncoding:
+        """
+        Preps input and target data for lemmatization as Causal LM text generation training
+        """
+        return tokenizer(
+            examples[model_consts.TEXT_TAGS], max_length=max_seq_len, truncation=True
+        )
+
     def prepare_data_collator(self, tokenizer: PreTrainedTokenizerFast) -> DataCollator:
         """
         Creates DataCollator objects depending on modeling task
@@ -329,6 +395,8 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
             return DataCollatorForTokenClassification(tokenizer=tokenizer)
         elif self.task == model_consts.LEMMATIZATION:
             return DataCollatorForSeq2Seq(tokenizer=tokenizer)
+        elif self.task == model_consts.LEMMATIZATION_CAUSAL_LM:
+            return DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
         else:
             raise NotImplementedError(f"Initializing data collator for task {self.task} not supported")
 
@@ -435,6 +503,28 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
             )
 
             trainer = Seq2SeqTrainer(
+                model=model,
+                args=training_args,
+                train_dataset=dataset_dict[model_consts.TRAIN],
+                eval_dataset=dataset_dict[model_consts.VAL],
+                tokenizer=tokenizer,
+                data_collator=data_collator
+            )
+        elif self.task == model_consts.LEMMATIZATION_CAUSAL_LM:
+            training_args = TrainingArguments(
+                output_dir=output_dir,
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+                per_device_train_batch_size=train_batch_size,
+                per_device_eval_batch_size=val_batch_size,
+                num_train_epochs=epochs,
+                evaluation_strategy=val_strategy,
+                save_strategy=save_strategy,
+                logging_steps=logging_steps,
+                push_to_hub=False
+            )
+
+            trainer = Trainer(
                 model=model,
                 args=training_args,
                 train_dataset=dataset_dict[model_consts.TRAIN],

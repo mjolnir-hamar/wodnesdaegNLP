@@ -12,6 +12,7 @@ from transformers import (
     AutoTokenizer,
     AutoModelForTokenClassification,
     AutoModelForSeq2SeqLM,
+    AutoModelForCausalLM,
     pipeline,
     Pipeline
 )
@@ -47,6 +48,8 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
             model = AutoModelForTokenClassification.from_pretrained(model_location)
         elif self.task == model_consts.LEMMATIZATION:
             model = AutoModelForSeq2SeqLM.from_pretrained(model_location)
+        elif self.task == model_consts.LEMMATIZATION_CAUSAL_LM:
+            model = AutoModelForCausalLM.from_pretrained(model_location)
         else:
             raise NotImplementedError
 
@@ -65,6 +68,8 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
             cls_task = model_consts.NER
         elif self.task == model_consts.LEMMATIZATION:
             cls_task = model_consts.TEXT_2_TEXT_GEN
+        elif self.task == model_consts.LEMMATIZATION_CAUSAL_LM:
+            cls_task = model_consts.TEST_GEN
         else:
             raise NotImplementedError(f"Pipeline creation for task \"{self.task}\" not yet implemented.")
         cls = pipeline(task=cls_task, model=model, tokenizer=tokenizer)
@@ -85,8 +90,22 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
         return model_predictions
 
     @staticmethod
+    def post_process_causal_lm_lemmatizer_output(pred_lemma: str) -> str:
+        """
+        Post process Causal LM lemmatizer output to extract the tagged lemma, remove the tags, and strip white space
+        Input: hanom PRO <lemma> hann </lemma>
+        Output: hann
+        """
+        return model_consts.LEMMA_SPAN_REGEX.findall(
+            pred_lemma
+        )[0].replace(
+            model_consts.LEMMA_START_TAG, ""
+        ).replace(
+            model_consts.LEMMA_END_TAG, ""
+        ).strip()
+
     def run_lemmatizer_inference(
-            cls: Pipeline, pos_model_predictions: List[List[POSModelPrediction]]
+            self, cls: Pipeline, pos_model_predictions: List[List[POSModelPrediction]] = None, file_lines: File = None
     ) -> List[List[LemmatizerModelPrediction]]:
         """
         Runs lemmatizer model inference on POS model predictions
@@ -94,18 +113,35 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
         Lemmatizer model input requires POS tags
         """
         model_predictions: List[List[LemmatizerModelPrediction]] = []
-        for model_preds in tqdm(pos_model_predictions, desc="Running lemmatizer inference..."):
-            sentence_preds: List[LemmatizerModelPrediction] = []
-            for model_pred in model_preds:
-                lemma_input = f"{model_pred.token.text} {model_pred.pos_tag.text}"
-                lemma_output = cls(lemma_input)[0]["generated_text"]
-                sentence_preds.append(
+        if pos_model_predictions is not None:
+            for model_preds in tqdm(pos_model_predictions, desc="Running lemmatizer inference..."):
+                sentence_preds: List[LemmatizerModelPrediction] = []
+                for model_pred in model_preds:
+                    lemma_input = f"{model_pred.token.text} {model_pred.pos_tag.text}"
+                    lemma_output = cls(lemma_input)[0]["generated_text"]
+                    if self.task == model_consts.LEMMATIZATION_CAUSAL_LM:
+                        lemma_output = self.post_process_causal_lm_lemmatizer_output(lemma_output)
+                    sentence_preds.append(
+                        LemmatizerModelPrediction(
+                            **json.loads(model_pred.json()),
+                            lemma=TextEntity(text=lemma_output)
+                        )
+                    )
+                model_predictions.append(sentence_preds)
+        else:
+            for line in file_lines.lines:
+                token, pos_tag = line.text.strip().split(" ")
+                lemma_output = cls(line.text)[0]["generated_text"]
+                if self.task == model_consts.LEMMATIZATION_CAUSAL_LM:
+                    lemma_output = self.post_process_causal_lm_lemmatizer_output(lemma_output)
+                model_predictions.append([
                     LemmatizerModelPrediction(
-                        **json.loads(model_pred.json()),
+                        token=TextEntity(text=token),
+                        pos_score=-1.0,
+                        pos_tag=TextEntity(text=pos_tag),
                         lemma=TextEntity(text=lemma_output)
                     )
-                )
-            model_predictions.append(sentence_preds)
+                ])
         return model_predictions
 
     def run_inference(
@@ -122,9 +158,15 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
                 raise ValueError("POS model inference requires the \"file_lines\" argument.")
             return self.run_pos_inference(cls=cls, file_lines=file_lines)
         else:
-            if pos_model_predictions is None:
-                raise ValueError("Lemmatizer model inference requires the \"pos_model_predictions\" argument.")
-            return self.run_lemmatizer_inference(cls=cls, pos_model_predictions=pos_model_predictions)
+            if pos_model_predictions:
+                return self.run_lemmatizer_inference(cls=cls, pos_model_predictions=pos_model_predictions)
+            elif file_lines:
+                return self.run_lemmatizer_inference(cls=cls, file_lines=file_lines)
+            else:
+                raise ValueError(
+                    "Lemmatizer model inference requires either the \"pos_model_predictions\" or \"file_lines\" "
+                    "argument."
+                )
 
     @staticmethod
     def align_bert_output_with_input_tokens(input_str: str, bert_output: List[Dict]) -> List[POSModelPrediction]:
@@ -171,8 +213,10 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
                     pos_score = f"{TermColor.GREEN}{pos_score}{TermColor.END}"
                 elif pos_score >= 0.5:
                     pos_score = f"{TermColor.YELLOW}{pos_score}{TermColor.END}"
-                else:
+                elif pos_score >= 0.0:
                     pos_score = f"{TermColor.RED}{pos_score}{TermColor.END}"
+                else:
+                    pos_score = f"{TermColor.DIM}{pos_score}{TermColor.END}"
                 output_table.append([
                     token_model_prediction.token.text,
                     f"{token_model_prediction.pos_tag.text} ({pos_score})",
@@ -184,7 +228,7 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
     def print_model_predictions(self, model_predictions: List[List[ModelPrediction]]):
         if self.task == model_consts.POS_TAGGING:
             pass
-        elif self.task == model_consts.LEMMATIZATION:
+        elif self.task == model_consts.LEMMATIZATION or self.task == model_consts.LEMMATIZATION_CAUSAL_LM:
             self.print_lemmatizer_model_predictions(model_predictions=model_predictions)
         else:
             raise NotImplementedError(f"Printing model predictions for task \"{self.task}\" is not yet implemented.")
