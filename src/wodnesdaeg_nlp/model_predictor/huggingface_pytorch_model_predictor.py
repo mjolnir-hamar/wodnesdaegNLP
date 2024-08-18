@@ -258,7 +258,7 @@ class HuggingFacePytorchModelPredictor(ModelPredictor):
     def write_model_predictions(self, model_predictions: List[List[ModelPrediction]], output_fname: str):
         if self.task == model_consts.POS_TAGGING:
             pass
-        elif self.task == model_consts.LEMMATIZATION:
+        elif self.task == model_consts.LEMMATIZATION or self.task == model_consts.LEMMATIZATION_CAUSAL_LM:
             self.write_lemmatizer_model_predictions(model_predictions=model_predictions, output_fname=output_fname)
         else:
             raise NotImplementedError(f"Writing model predictions for task \"{self.task}\" is not yet implemented.")
