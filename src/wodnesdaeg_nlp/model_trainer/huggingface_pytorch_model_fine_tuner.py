@@ -470,7 +470,7 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
                 per_device_train_batch_size=train_batch_size,
                 per_device_eval_batch_size=val_batch_size,
                 num_train_epochs=epochs,
-                evaluation_strategy=val_strategy,
+                eval_strategy=val_strategy,
                 save_strategy=save_strategy,
                 logging_steps=logging_steps,
                 push_to_hub=False
@@ -518,7 +518,7 @@ class HuggingFacePytorchModelFineTuner(ModelTrainer):
                 per_device_train_batch_size=train_batch_size,
                 per_device_eval_batch_size=val_batch_size,
                 num_train_epochs=epochs,
-                evaluation_strategy=val_strategy,
+                eval_strategy=val_strategy,
                 save_strategy=save_strategy,
                 logging_steps=logging_steps,
                 push_to_hub=False
