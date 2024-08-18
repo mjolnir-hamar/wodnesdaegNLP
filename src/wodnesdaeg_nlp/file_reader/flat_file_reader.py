@@ -1,6 +1,7 @@
 from typing import List
 
 import wodnesdaeg_nlp.consts.file_types as file_consts
+from wodnesdaeg_nlp.consts.string_consts import PUNCTS
 from wodnesdaeg_nlp.data_types import (
     File,
     FileLine
@@ -14,7 +15,7 @@ class FlatFileReader:
         with open(file_path, "r") as _f:
             for line in _f:
                 lines.append(
-                    FileLine(text=self.split_line(line=line, file_format=file_format)[column_number])
+                    FileLine(text=self.split_line(line=self.clean_line(line), file_format=file_format)[column_number])
                 )
         return File(
             name=file_path.split("/")[-1],
@@ -26,3 +27,9 @@ class FlatFileReader:
         if file_format == file_consts.TSV:
             return line.split("\t")
         raise NotImplementedError
+
+    @staticmethod
+    def clean_line(line: str) -> str:
+        for punct in PUNCTS:
+            line = line.replace(punct, "")
+        return line
