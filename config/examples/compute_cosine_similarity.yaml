@@ -1,0 +1,40 @@
+# Computes cosine similarity between 2 input strings using a pretrained model
+
+# Expected result printed to the terminal in this case using embeddings from an Old Norse POS Tagger model trained on
+# IceCorpus data:
+
+# Input strings:
+#         hann er å skipi
+#         hun er å skipi
+# Cosine Similarity: 0.9846965670585632
+
+
+# Create the pipeline
+pipeline:
+  # Add pipes
+  pipes:
+    # Single pipe to load the model and calculate cosine similarity
+    - name: calc_cosine_sim
+      output: compute_cosine_similarity.cosine_sim
+      src_cls_name: SemanticSimilarityEvaluator
+      execution_steps:
+        # Load the model and tokenizer
+        - name: load_pretrained_model_and_tokenizer
+          args:
+            model_location: # point to your trained model
+          expected_outputs: [tokenizer, model]
+        # Compute similarity and print it to the screen
+        - name: compute_cosine_similarity
+          args:
+            # First string in the comparison
+            input_str_1: "hann er å skipi"
+            # Second string in the comparison
+            input_str_2: "hun er å skipi"
+            # Tokenizer loaded in the prior execution step
+            tokenizer: load_pretrained_model_and_tokenizer.tokenizer
+            # Model loaded in the prior execution step
+            model: load_pretrained_model_and_tokenizer.model
+            # Flag to print the result to the terminal (default is "false" in order to integrate with other pipes and
+            # not overload the screen with unnecessary output)
+            print_result: true
+          expected_outputs: [cosine_sim]

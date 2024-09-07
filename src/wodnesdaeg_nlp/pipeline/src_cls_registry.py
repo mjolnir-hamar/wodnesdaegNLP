@@ -5,6 +5,7 @@ from wodnesdaeg_nlp.interactive_input_reader import *
 from wodnesdaeg_nlp.corpus_extractor import *
 from wodnesdaeg_nlp.model_trainer import *
 from wodnesdaeg_nlp.model_predictor import *
+from wodnesdaeg_nlp.semantic_similarity_evaluator import *
 
 
 SRC_CLS_REGISTRY: Dict[str, Any] = {
@@ -17,5 +18,6 @@ SRC_CLS_REGISTRY: Dict[str, Any] = {
     "LatinTreebankPerseusCorpusExtractor": LatinTreebankPerseusCorpusExtractor,
     "RemXmlCorpusExtractor": RemXmlCorpusExtractor,
     "HuggingFacePytorchModelFineTuner": HuggingFacePytorchModelFineTuner,
-    "HuggingFacePytorchModelPredictor": HuggingFacePytorchModelPredictor
+    "HuggingFacePytorchModelPredictor": HuggingFacePytorchModelPredictor,
+    "SemanticSimilarityEvaluator": SemanticSimilarityEvaluator
 }
