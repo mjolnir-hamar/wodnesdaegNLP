@@ -1,0 +1,26 @@
+# Create the pipeline
+pipeline:
+  # Add pipes
+  pipes:
+    # Pipe for data extraction using the IceCorpusExtractor designed to pull data from IceCorpus grammars
+    - name: ice_corpus_extractor
+      output: consolidate_ner_tags.corpora
+      src_cls_name: IceCorpusExtractor
+      execution_steps:
+        # Extract the data
+        - name: extract_corpora
+          args:
+            corpus_dir: # point to the location of icecorpus/finished on your disk
+            keep_case_markings: false
+          expected_outputs: [corpora]
+        # Map POS tags to the WodnesdaegNLP set
+        - name: consolidate_ner_tags
+          args:
+            corpora: extract_corpora.corpora
+            ner_tag_config_file: config/ner_tag_sets/ice_corpus_tags_to_wodnesdaeg_unified_tags.json
+          expected_outputs: [corpora]
+        # Write the data to disk
+        - name: write_corpora_to_file
+          args:
+            corpora: consolidate_ner_tags.corpora
+            outdir: non_models_training_data
